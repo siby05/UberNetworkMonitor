@@ -67,16 +67,16 @@ class MainActivity : Activity() {
   root.addView(metrics)
   root.addView(text("PING HISTORY  ·  NZ TIME",12f,muted,true).apply { setPadding(0,dp(8),0,dp(6)) })
   graph=PerformanceGraph(this)
-  root.addView(graph,LinearLayout.LayoutParams(-1,dp(110)))
+  root.addView(graph,LinearLayout.LayoutParams(-1,0,1f).apply { topMargin=dp(8); bottomMargin=dp(12) })
   val middle=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER }
-  root.addView(middle,LinearLayout.LayoutParams(-1,dp(76)))
+  root.addView(middle,LinearLayout.LayoutParams(-1,dp(112)).apply { bottomMargin=dp(26) })
   play=Button(this).apply { text="▶"; textSize=23f; isAllCaps=false; setTextColor(Color.WHITE); background=bg(green,dp(90).toFloat()); elevation=dp(5).toFloat(); setOnClickListener {
    val current=getSharedPreferences("monitor",MODE_PRIVATE).getString("state","STOPPED")
    if(current=="STOPPED") { val i=Intent(this@MainActivity,MonitorService::class.java).setAction("START"); if(Build.VERSION.SDK_INT>=26) startForegroundService(i) else startService(i); getSharedPreferences("monitor",MODE_PRIVATE).edit().putString("state","CHECKING").apply() }
    else { startService(Intent(this@MainActivity,MonitorService::class.java).setAction("STOP")); getSharedPreferences("monitor",MODE_PRIVATE).edit().putString("state","STOPPED").apply() }
    updateStatus()
   } }
-  middle.addView(play,LinearLayout.LayoutParams(dp(60),dp(60)))
+  middle.addView(play,LinearLayout.LayoutParams(dp(76),dp(76)))
   middle.addView(text("Tap to start or stop",12f,muted).apply { gravity=Gravity.CENTER; setPadding(0,dp(2),0,0) })
   // Navigation lives in the top-right hamburger menu to preserve dashboard space.
   val menuButton=Button(this).apply {
@@ -100,7 +100,7 @@ class MainActivity : Activity() {
   headerContainer.addView(menuButton,menuParams)
   log=text("No readings yet",11f,muted).apply { setTextIsSelectable(true); setPadding(dp(10),dp(8),dp(10),dp(8)); background=bg(Color.WHITE,dp(12).toFloat()); maxLines=5 }
   log.visibility=View.GONE
-  root.addView(log,LinearLayout.LayoutParams(-1,dp(82)))
+  // History is displayed in a dialog; do not reserve hidden dashboard space.
   setContentView(root)
   if(Build.VERSION.SDK_INT>=33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),11)
   refresh(); updateStatus()
