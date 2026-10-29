@@ -21,11 +21,13 @@ class MonitorService : Service() {
  private var lastAlert=0L
  private var paused=false
  private val alertChannel="network_alerts"
+ private fun state(value:String) { getSharedPreferences("monitor",MODE_PRIVATE).edit().putString("state",value).apply() }
  override fun onBind(intent:Intent?) : IBinder? = null
  override fun onStartCommand(intent:Intent?, flags:Int, startId:Int):Int {
-  if(intent?.action=="STOP") { running=false; append(this,"SESSION_STOP","","",""); stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY }
+  if(intent?.action=="STOP") { running=false; state("STOPPED"); append(this,"SESSION_STOP","","",""); stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY }
   if(running) return START_STICKY
   running=true
+  state("CHECKING")
   val channel="network_monitor"
   val nm=getSystemService(NotificationManager::class.java)
   nm.createNotificationChannel(NotificationChannel(channel,"Active network monitoring",NotificationManager.IMPORTANCE_LOW))
@@ -49,6 +51,7 @@ class MonitorService : Service() {
   if(!wifi && !cellular) {
    if(!paused) {
     paused=true
+    state("PAUSED")
     if(outage) { outage=false; append(this,"OUTAGE_INTERRUPTED","","","Transport disconnected; no confirmed restoration") }
     failures=0
     // No internet probes, outage alerts, or report entries while disconnected.
@@ -65,6 +68,7 @@ class MonitorService : Service() {
    c.connectTimeout=3000; c.readTimeout=3000; c.useCaches=false; c.instanceFollowRedirects=false
    try { val status=c.responseCode; latency=((System.nanoTime()-start)/1000000).toString(); result=if(status==204) "OK" else "HTTP_UNEXPECTED"; details="HTTP $status" } finally { c.disconnect() }
   } catch(e:Exception) { details=e.javaClass.simpleName }
+  state(if(result=="OK") "OK" else if(failures>=1) "DOWN" else "CHECKING")
   record(result,transport,latency,details)
   updateAlert(result=="OK",if(result=="OK") "Internet restored" else "Internet check failed ($result)")
  }
