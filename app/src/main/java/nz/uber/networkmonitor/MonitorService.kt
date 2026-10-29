@@ -19,6 +19,7 @@ class MonitorService : Service() {
  private var failures=0
  private var outage=false
  private var lastAlert=0L
+ private var paused=false
  private val alertChannel="network_alerts"
  override fun onBind(intent:Intent?) : IBinder? = null
  override fun onStartCommand(intent:Intent?, flags:Int, startId:Int):Int {
@@ -38,13 +39,23 @@ class MonitorService : Service() {
  }
  private fun check() {
   val now=System.currentTimeMillis()
-  if(lastCheck!=0L && now-lastCheck>20000) append(this,"MONITORING_GAP","","", "Gap ms=${now-lastCheck}; not a confirmed outage")
+  if(!paused && lastCheck!=0L && now-lastCheck>20000) { if(outage) { outage=false; failures=0; append(this,"OUTAGE_INTERRUPTED","","","Monitoring gap; restoration unconfirmed") } }
   lastCheck=now
   val cm=getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
   val caps=cm.getNetworkCapabilities(cm.activeNetwork)
   val wifi=caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)==true
   val transport=if(wifi) "WIFI" else if(caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)==true) "CELLULAR" else "OTHER_OR_DISCONNECTED"
-  if(!wifi) { record("HOTSPOT_LINK_UNAVAILABLE",transport,"","Android not on Wi-Fi hotspot"); updateAlert(false,"iPhone hotspot link disconnected"); return }
+  val cellular=caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)==true
+  if(!wifi && !cellular) {
+   if(!paused) {
+    paused=true
+    if(outage) { outage=false; append(this,"OUTAGE_INTERRUPTED","","","Transport disconnected; no confirmed restoration") }
+    failures=0
+    // No internet probes, outage alerts, or report entries while disconnected.
+   }
+   return
+  }
+  if(paused) { paused=false; failures=0; lastCheck=now }
   var latency=""
   var result="INTERNET_FAILURE"
   var details=""
