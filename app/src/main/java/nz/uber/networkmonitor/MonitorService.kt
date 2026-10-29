@@ -20,6 +20,8 @@ class MonitorService : Service() {
  private var outage=false
  private var lastAlert=0L
  private var paused=false
+ private val recent=ArrayDeque<Pair<Boolean,Long>>()
+ private var previousLatency:Long?=null
  private val alertChannel="network_alerts"
  private fun state(value:String) { getSharedPreferences("monitor",MODE_PRIVATE).edit().putString("state",value).apply() }
  override fun onBind(intent:Intent?) : IBinder? = null
@@ -58,7 +60,7 @@ class MonitorService : Service() {
    }
    return
   }
-  if(paused) { paused=false; failures=0; lastCheck=now }
+  if(paused) { paused=false; failures=0; lastCheck=now; recent.clear(); previousLatency=null }
   var latency=""
   var result="INTERNET_FAILURE"
   var details=""
@@ -68,8 +70,24 @@ class MonitorService : Service() {
    c.connectTimeout=3000; c.readTimeout=3000; c.useCaches=false; c.instanceFollowRedirects=false
    try { val status=c.responseCode; latency=((System.nanoTime()-start)/1000000).toString(); result=if(status==204) "OK" else "HTTP_UNEXPECTED"; details="HTTP $status" } finally { c.disconnect() }
   } catch(e:Exception) { details=e.javaClass.simpleName }
-  state(if(result=="OK") "OK" else if(failures>=1) "DOWN" else "CHECKING")
-  record(result,transport,latency,details)
+  val good=result=="OK"
+  val ms=latency.toLongOrNull() ?: -1L
+  val jitter=if(good && ms>=0 && previousLatency!=null) kotlin.math.abs(ms-previousLatency!!) else -1L
+  if(good) previousLatency=ms else previousLatency=null
+  recent.addLast(Pair(good,ms))
+  if(recent.size>60) recent.removeFirst()
+  val failedPercent=(recent.count { !it.first }*100.0/recent.size)
+  val quality=when {
+   !good->"OFFLINE"
+   failedPercent>5 || ms>200 || jitter>40->"POOR"
+   failedPercent>1 || ms>100 || jitter>20->"FAIR"
+   ms>50 || jitter>10->"GOOD"
+   else->"EXCELLENT"
+  }
+  val prefs=getSharedPreferences("monitor",MODE_PRIVATE)
+  prefs.edit().putString("quality",quality).putLong("ping",ms).putLong("jitter",jitter).putFloat("loss",failedPercent.toFloat()).apply()
+  state(if(good) "OK" else if(failures>=1) "DOWN" else "CHECKING")
+  record(result,transport,latency,"$details; quality=$quality; jitter_ms=$jitter; failed_checks_pct=${"%.1f".format(java.util.Locale.US,failedPercent)}")
   updateAlert(result=="OK",if(result=="OK") "Internet restored" else "Internet check failed ($result)")
  }
  private fun updateAlert(success:Boolean, reason:String) {
