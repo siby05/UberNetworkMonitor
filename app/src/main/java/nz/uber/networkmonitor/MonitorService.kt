@@ -35,7 +35,7 @@ class MonitorService : Service() {
   nm.createNotificationChannel(NotificationChannel(channel,"Active network monitoring",NotificationManager.IMPORTANCE_LOW))
   nm.createNotificationChannel(NotificationChannel(alertChannel,"Network outage alerts",NotificationManager.IMPORTANCE_HIGH).apply { enableVibration(true); setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI,null) })
   val pending=PendingIntent.getActivity(this,0,Intent(this,MainActivity::class.java),PendingIntent.FLAG_IMMUTABLE)
-  val notification=Notification.Builder(this,channel).setContentTitle("Uber Network Monitor active").setContentText("Checking connection every 5 seconds (low data)").setSmallIcon(android.R.drawable.stat_notify_sync).setContentIntent(pending).setOngoing(true).build()
+  val notification=Notification.Builder(this,channel).setContentTitle("PULSE Network Monitor active").setContentText("Checking connection every 5 seconds (low data)").setSmallIcon(android.R.drawable.stat_notify_sync).setContentIntent(pending).setOngoing(true).build()
   startForeground(1,notification)
   append(this,"SESSION_START","","","Monitoring Android via iPhone hotspot")
   executor.scheduleWithFixedDelay({ if(running) check() },0,5,TimeUnit.SECONDS)
