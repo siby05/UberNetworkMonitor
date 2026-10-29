@@ -42,45 +42,44 @@ class MainActivity : Activity() {
   window.statusBarColor=Color.WHITE
   window.navigationBarColor=Color.WHITE
   window.decorView.systemUiVisibility=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-  val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(22),dp(18),dp(22),dp(12)); setBackgroundColor(Color.rgb(248,250,253)) }
+  val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(18),dp(8),dp(18),dp(8)); setBackgroundColor(Color.rgb(248,250,253)) }
   val header=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER }
-  header.addView(text("⌁  ◉  ⌁",35f,green,true).apply { gravity=Gravity.CENTER })
-  header.addView(text("PULSE",24f,ink,true).apply { gravity=Gravity.CENTER })
+  header.addView(text("⌁  ◉  ⌁",26f,green,true).apply { gravity=Gravity.CENTER })
+  header.addView(text("PULSE",21f,ink,true).apply { gravity=Gravity.CENTER })
   header.addView(text("NETWORK MONITOR",10f,muted,true).apply { gravity=Gravity.CENTER })
   root.addView(header)
-  val card=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(18),dp(18),dp(18),dp(18)); background=bg(Color.WHITE,dp(18).toFloat()); elevation=dp(3).toFloat() }
-  val cardParams=LinearLayout.LayoutParams(-1,-2).apply { topMargin=dp(22) }
+  val card=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(14),dp(10),dp(14),dp(10)); background=bg(Color.WHITE,dp(18).toFloat()); elevation=dp(3).toFloat() }
+  val cardParams=LinearLayout.LayoutParams(-1,-2).apply { topMargin=dp(8) }
   root.addView(card,cardParams)
   card.addView(text("CONNECTION DETAILS",12f,muted,true))
-  networkInfo=text("Detecting network…",15f,ink).apply { setPadding(0,dp(12),0,dp(14)) }
+  networkInfo=text("Detecting network…",15f,ink).apply { setPadding(0,dp(6),0,dp(7)) }
   card.addView(networkInfo)
-  statusCard=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; setPadding(dp(12),dp(20),dp(12),dp(20)); background=bg(Color.rgb(238,242,247),dp(16).toFloat()) }
+  statusCard=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; setPadding(dp(10),dp(8),dp(10),dp(8)); background=bg(Color.rgb(238,242,247),dp(16).toFloat()) }
   status=text("○  NOT RUNNING",24f,ink,true).apply { gravity=Gravity.CENTER }
   subtitle=text("Press Start to monitor",13f,muted).apply { gravity=Gravity.CENTER; setPadding(0,dp(7),0,0) }
   statusCard.addView(status); statusCard.addView(subtitle)
-  card.addView(statusCard,LinearLayout.LayoutParams(-1,dp(126)))
-  val tip=text("Internet check every 5 seconds · NZ time",12f,muted).apply { gravity=Gravity.CENTER; setPadding(0,dp(16),0,0) }
+  card.addView(statusCard,LinearLayout.LayoutParams(-1,dp(88)))
+  val tip=text("Internet check every 5 seconds · NZ time",12f,muted).apply { gravity=Gravity.CENTER; setPadding(0,dp(6),0,0) }
   card.addView(tip)
   metrics=text("Ping —   •   Jitter —   •   Failed checks —",13f,ink,true).apply { gravity=Gravity.CENTER; setPadding(0,dp(12),0,dp(8)) }
   root.addView(metrics)
   root.addView(text("PING HISTORY  ·  NZ TIME",12f,muted,true).apply { setPadding(0,dp(8),0,dp(6)) })
   graph=PerformanceGraph(this)
-  root.addView(graph,LinearLayout.LayoutParams(-1,dp(160)))
+  root.addView(graph,LinearLayout.LayoutParams(-1,dp(110)))
   val middle=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER }
-  val space=LinearLayout.LayoutParams(-1,0,1f)
-  root.addView(middle,space)
-  play=Button(this).apply { text="▶"; textSize=30f; isAllCaps=false; setTextColor(Color.WHITE); background=bg(green,dp(90).toFloat()); elevation=dp(5).toFloat(); setOnClickListener {
+  root.addView(middle,LinearLayout.LayoutParams(-1,dp(76)))
+  play=Button(this).apply { text="▶"; textSize=23f; isAllCaps=false; setTextColor(Color.WHITE); background=bg(green,dp(90).toFloat()); elevation=dp(5).toFloat(); setOnClickListener {
    val current=getSharedPreferences("monitor",MODE_PRIVATE).getString("state","STOPPED")
    if(current=="STOPPED") { val i=Intent(this@MainActivity,MonitorService::class.java).setAction("START"); if(Build.VERSION.SDK_INT>=26) startForegroundService(i) else startService(i); getSharedPreferences("monitor",MODE_PRIVATE).edit().putString("state","CHECKING").apply() }
    else { startService(Intent(this@MainActivity,MonitorService::class.java).setAction("STOP")); getSharedPreferences("monitor",MODE_PRIVATE).edit().putString("state","STOPPED").apply() }
    updateStatus()
   } }
-  middle.addView(play,LinearLayout.LayoutParams(dp(92),dp(92)))
-  middle.addView(text("Tap to start or stop",12f,muted).apply { gravity=Gravity.CENTER; setPadding(0,dp(12),0,0) })
-  val nav=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER; setPadding(0,dp(10),0,dp(6)) }
+  middle.addView(play,LinearLayout.LayoutParams(dp(60),dp(60)))
+  middle.addView(text("Tap to start or stop",12f,muted).apply { gravity=Gravity.CENTER; setPadding(0,dp(2),0,0) })
+  val nav=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER; setPadding(0,dp(4),0,dp(2)) }
   fun tab(label:String,click:()->Unit) {
    val b=Button(this).apply { text=label; textSize=12f; isAllCaps=false; setTextColor(ink); background=bg(Color.rgb(234,240,247),dp(14).toFloat()); setOnClickListener { click() } }
-   nav.addView(b,LinearLayout.LayoutParams(0,dp(64),1f).apply { marginEnd=dp(5) })
+   nav.addView(b,LinearLayout.LayoutParams(0,dp(52),1f).apply { marginEnd=dp(5) })
   }
   tab("◉\nMonitor") { refresh() }
   tab("◷\nHistory") { showReport() }
