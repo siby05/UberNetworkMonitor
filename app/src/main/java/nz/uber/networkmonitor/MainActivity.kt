@@ -84,15 +84,14 @@ class MainActivity : Activity() {
    text="☰"; textSize=25f; isAllCaps=false; contentDescription="Open navigation menu"
    setTextColor(ink); background=bg(Color.rgb(234,240,247),dp(12).toFloat())
    setOnClickListener {
-    val items=arrayOf("Monitor · Live dashboard","History · Network events","Uber Mark · Mark suspected missed trip","Share CSV report","Outage report","Refresh readings")
+    val items=arrayOf("Monitor · Live dashboard","History · Network summary","Share CSV report","Outage report","Refresh readings")
     android.app.AlertDialog.Builder(this@MainActivity).setTitle("PULSE Menu").setItems(items) { _,which ->
      when(which) {
       0->refresh()
       1->showReport()
-      2->{ MonitorService.append(this@MainActivity,"UBER_MARKER","manual","","User marked suspected missed request"); Toast.makeText(this@MainActivity,"Uber marker saved",Toast.LENGTH_SHORT).show() }
-      3->{ val file=File(filesDir,"events.csv"); if(file.exists()) { val share=Intent(Intent.ACTION_SEND).apply { type="text/plain"; putExtra(Intent.EXTRA_TEXT,file.readText()) }; startActivity(Intent.createChooser(share,"Share CSV report")) } else Toast.makeText(this@MainActivity,"No report yet",Toast.LENGTH_SHORT).show() }
-      4->showReport()
-      5->refresh()
+      2->{ val file=File(filesDir,"events.csv"); if(file.exists()) { val share=Intent(Intent.ACTION_SEND).apply { type="text/plain"; putExtra(Intent.EXTRA_TEXT,file.readText()) }; startActivity(Intent.createChooser(share,"Share CSV report")) } else Toast.makeText(this@MainActivity,"No report yet",Toast.LENGTH_SHORT).show() }
+      3->showReport()
+      4->refresh()
      }
     }.show()
    }
@@ -183,7 +182,6 @@ class MainActivity : Activity() {
     }
     "SLOW_NETWORK" -> important.add("🟠 ${fmt.format(e.time)}  Slow network")
     "NETWORK_QUALITY_RECOVERED" -> important.add("🟢 ${fmt.format(e.time)}  Speed improved")
-    "UBER_MARKER" -> important.add("📍 ${fmt.format(e.time)}  Uber marker")
    }
   }
   if(sessionStart!=null) monitoredSeconds+=java.time.Duration.between(sessionStart,Instant.now()).seconds.coerceAtLeast(0)
