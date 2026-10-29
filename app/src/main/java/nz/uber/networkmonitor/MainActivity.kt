@@ -11,6 +11,9 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.net.wifi.WifiManager
 import java.io.File
 import java.time.Instant
 import java.time.ZoneId
@@ -26,51 +29,90 @@ class MainActivity : Activity() {
  private fun bg(color:Int, radius:Float=24f):GradientDrawable = GradientDrawable().apply { setColor(color); cornerRadius=radius }
  private fun dp(v:Int):Int=(v*resources.displayMetrics.density).toInt()
  private fun text(value:String,size:Float,color:Int,bold:Boolean=false)=TextView(this).apply { text=value; textSize=size; setTextColor(color); if(bold) setTypeface(null,Typeface.BOLD) }
+ private lateinit var networkInfo:TextView
+ private lateinit var play:Button
+ private val green=Color.rgb(39,174,96)
+ private val red=Color.rgb(215,61,72)
+ private val ink=Color.rgb(35,48,64)
+ private val muted=Color.rgb(115,128,143)
  override fun onCreate(savedInstanceState:Bundle?) {
   super.onCreate(savedInstanceState)
-  window.statusBarColor=Color.rgb(13,20,34)
-  window.navigationBarColor=Color.rgb(13,20,34)
-  val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(20),dp(20),dp(20),dp(16)); setBackgroundColor(Color.rgb(13,20,34)) }
-  val brand=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL }
-  val mark=text("◉",34f,Color.rgb(84,217,174),true)
-  brand.addView(mark)
-  brand.addView(text("  PULSE  /  Network Monitor",20f,Color.WHITE,true))
-  root.addView(brand)
-  root.addView(text("Your connection, at a glance",13f,Color.rgb(155,169,190)).apply { setPadding(0,dp(5),0,dp(22)) })
-  statusCard=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; setPadding(dp(20),dp(28),dp(20),dp(28)); background=bg(Color.rgb(40,62,65),dp(24).toFloat()) }
-  status=text("●  CHECKING",29f,Color.WHITE,true).apply { gravity=Gravity.CENTER }
-  subtitle=text("Waiting for first network test",14f,Color.WHITE).apply { gravity=Gravity.CENTER; setPadding(0,dp(10),0,0) }
+  window.statusBarColor=Color.WHITE
+  window.navigationBarColor=Color.WHITE
+  window.decorView.systemUiVisibility=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+  val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(22),dp(18),dp(22),dp(12)); setBackgroundColor(Color.rgb(248,250,253)) }
+  val header=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER }
+  header.addView(text("◉",35f,green,true).apply { gravity=Gravity.CENTER })
+  header.addView(text("PULSE",24f,ink,true).apply { gravity=Gravity.CENTER })
+  header.addView(text("NETWORK MONITOR",10f,muted,true).apply { gravity=Gravity.CENTER })
+  root.addView(header)
+  val card=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(18),dp(18),dp(18),dp(18)); background=bg(Color.WHITE,dp(18).toFloat()); elevation=dp(3).toFloat() }
+  val cardParams=LinearLayout.LayoutParams(-1,-2).apply { topMargin=dp(22) }
+  root.addView(card,cardParams)
+  card.addView(text("CONNECTION DETAILS",12f,muted,true))
+  networkInfo=text("Detecting network…",15f,ink).apply { setPadding(0,dp(12),0,dp(14)) }
+  card.addView(networkInfo)
+  statusCard=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; setPadding(dp(12),dp(20),dp(12),dp(20)); background=bg(Color.rgb(238,242,247),dp(16).toFloat()) }
+  status=text("○  NOT RUNNING",24f,ink,true).apply { gravity=Gravity.CENTER }
+  subtitle=text("Press Start to monitor",13f,muted).apply { gravity=Gravity.CENTER; setPadding(0,dp(7),0,0) }
   statusCard.addView(status); statusCard.addView(subtitle)
-  root.addView(statusCard,LinearLayout.LayoutParams(-1,dp(180)))
-  root.addView(text("LIVE MONITORING",12f,Color.rgb(155,169,190),true).apply { setPadding(0,dp(24),0,dp(10)) })
-  fun action(title:String,color:Int,click:()->Unit) {
-   val b=Button(this).apply { text=title; textSize=14f; isAllCaps=false; setTextColor(Color.WHITE); background=bg(color,dp(14).toFloat()); setOnClickListener { click() } }
-   root.addView(b,LinearLayout.LayoutParams(-1,dp(54)).apply { bottomMargin=dp(10) })
+  card.addView(statusCard,LinearLayout.LayoutParams(-1,dp(126)))
+  val tip=text("Internet check every 5 seconds · NZ time",12f,muted).apply { gravity=Gravity.CENTER; setPadding(0,dp(16),0,0) }
+  card.addView(tip)
+  val middle=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER }
+  val space=LinearLayout.LayoutParams(-1,0,1f)
+  root.addView(middle,space)
+  play=Button(this).apply { text="▶"; textSize=30f; isAllCaps=false; setTextColor(Color.WHITE); background=bg(green,dp(90).toFloat()); elevation=dp(5).toFloat(); setOnClickListener {
+   val current=getSharedPreferences("monitor",MODE_PRIVATE).getString("state","STOPPED")
+   if(current=="STOPPED") { val i=Intent(this@MainActivity,MonitorService::class.java).setAction("START"); if(Build.VERSION.SDK_INT>=26) startForegroundService(i) else startService(i); getSharedPreferences("monitor",MODE_PRIVATE).edit().putString("state","CHECKING").apply() }
+   else { startService(Intent(this@MainActivity,MonitorService::class.java).setAction("STOP")); getSharedPreferences("monitor",MODE_PRIVATE).edit().putString("state","STOPPED").apply() }
+   updateStatus()
+  } }
+  middle.addView(play,LinearLayout.LayoutParams(dp(92),dp(92)))
+  middle.addView(text("Tap to start or stop",12f,muted).apply { gravity=Gravity.CENTER; setPadding(0,dp(12),0,0) })
+  val nav=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER; setPadding(0,dp(10),0,dp(6)) }
+  fun tab(label:String,click:()->Unit) {
+   val b=Button(this).apply { text=label; textSize=12f; isAllCaps=false; setTextColor(ink); background=bg(Color.rgb(234,240,247),dp(14).toFloat()); setOnClickListener { click() } }
+   nav.addView(b,LinearLayout.LayoutParams(0,dp(64),1f).apply { marginEnd=dp(5) })
   }
-  action("▶  Start monitoring",Color.rgb(27,137,105)) { val i=Intent(this,MonitorService::class.java).setAction("START"); if(Build.VERSION.SDK_INT>=26) startForegroundService(i) else startService(i); getSharedPreferences("monitor",MODE_PRIVATE).edit().putString("state","CHECKING").apply(); updateStatus() }
-  action("■  Stop monitoring",Color.rgb(65,77,99)) { startService(Intent(this,MonitorService::class.java).setAction("STOP")); getSharedPreferences("monitor",MODE_PRIVATE).edit().putString("state","STOPPED").apply(); updateStatus(); refresh() }
-  action("＋  Mark missed Uber request",Color.rgb(45,66,100)) { MonitorService.append(this,"UBER_MARKER","manual","","User marked suspected missed request"); refresh(); Toast.makeText(this,"Marker saved",Toast.LENGTH_SHORT).show() }
-  action("▤  View outage report",Color.rgb(45,66,100)) { showReport() }
-  action("↻  Refresh history",Color.rgb(45,66,100)) { refresh() }
-  action("⇧  Share CSV report",Color.rgb(45,66,100)) { val file=File(filesDir,"events.csv"); if(!file.exists()) { Toast.makeText(this,"No report yet",Toast.LENGTH_SHORT).show(); return@action }; val intent=Intent(Intent.ACTION_SEND).apply { type="text/plain"; putExtra(Intent.EXTRA_TEXT,file.readText()) }; startActivity(Intent.createChooser(intent,"Share monitoring report")) }
-  root.addView(text("RECENT ACTIVITY  ·  NZ TIME",12f,Color.rgb(155,169,190),true).apply { setPadding(0,dp(14),0,dp(8)) })
-  log=text("No readings yet",12f,Color.rgb(213,223,235)).apply { setTextIsSelectable(true); setPadding(dp(14),dp(12),dp(14),dp(12)); background=bg(Color.rgb(25,36,54),dp(14).toFloat()) }
-  root.addView(log)
-  val scroll=ScrollView(this).apply { fillViewport=true; addView(root) }
-  setContentView(scroll)
+  tab("◉\nMonitor") { refresh() }
+  tab("◷\nHistory") { showReport() }
+  tab("＋\nUber mark") { MonitorService.append(this,"UBER_MARKER","manual","","User marked suspected missed request"); Toast.makeText(this,"Marker saved",Toast.LENGTH_SHORT).show(); refresh() }
+  tab("⚙\nMore") {
+   val options=arrayOf("Refresh readings","Share CSV","Outage report")
+   android.app.AlertDialog.Builder(this).setTitle("PULSE tools").setItems(options) { _,which ->
+    when(which) {
+     0->refresh()
+     1->{ val file=File(filesDir,"events.csv"); if(file.exists()) { val intent=Intent(Intent.ACTION_SEND).apply { type="text/plain"; putExtra(Intent.EXTRA_TEXT,file.readText()) }; startActivity(Intent.createChooser(intent,"Share CSV report")) } else Toast.makeText(this,"No report yet",Toast.LENGTH_SHORT).show() }
+     2->showReport()
+    }
+   }.show()
+  }
+  root.addView(nav)
+  log=text("No readings yet",11f,muted).apply { setTextIsSelectable(true); setPadding(dp(10),dp(8),dp(10),dp(8)); background=bg(Color.WHITE,dp(12).toFloat()); maxLines=5 }
+  root.addView(log,LinearLayout.LayoutParams(-1,dp(82)))
+  setContentView(root)
   if(Build.VERSION.SDK_INT>=33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),11)
   refresh(); updateStatus()
  }
  private fun updateStatus() {
   val value=getSharedPreferences("monitor",MODE_PRIVATE).getString("state","STOPPED") ?: "STOPPED"
   val (label,description,color)=when(value) {
-   "OK"->Triple("●  CONNECTED","Internet is accessible",Color.rgb(24,133,99))
-   "DOWN"->Triple("●  NETWORK DOWN","Connected, but internet is not accessible",Color.rgb(179,48,62))
-   "PAUSED"->Triple("Ⅱ  PAUSED","No Wi-Fi or mobile data — checks paused",Color.rgb(79,91,110))
-   "CHECKING"->Triple("◌  CHECKING","Testing internet connectivity…",Color.rgb(48,98,157))
-   else->Triple("○  NOT RUNNING","Tap Start monitoring to begin",Color.rgb(79,91,110))
+   "OK"->Triple("●  INTERNET OK","Connected and accessible",green)
+   "DOWN"->Triple("●  NETWORK FAILED","Connected, but internet inaccessible",red)
+   "PAUSED"->Triple("Ⅱ  PAUSED","No Wi-Fi or mobile data",muted)
+   "CHECKING"->Triple("◌  CHECKING","Testing internet accessibility",Color.rgb(51,117,186))
+   else->Triple("○  NOT RUNNING","Press Start to monitor",muted)
   }
-  status.text=label; subtitle.text=description; statusCard.background=bg(color,dp(24).toFloat())
+  status.text=label; status.setTextColor(color); subtitle.text=description
+  statusCard.background=bg(Color.argb(23,Color.red(color),Color.green(color),Color.blue(color)),dp(16).toFloat())
+  play.text=if(value=="STOPPED") "▶" else "■"
+  play.background=bg(if(value=="STOPPED") green else red,dp(90).toFloat())
+  val cm=getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+  val caps=cm.getNetworkCapabilities(cm.activeNetwork)
+  val wifi=caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)==true
+  val cell=caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)==true
+  networkInfo.text=when { wifi->"◉  Wi-Fi connected\nInternet status shown below"; cell->"▥  Mobile data connected\nInternet status shown below"; else->"○  Wi-Fi / Mobile data disconnected" }
  }
  override fun onResume() { super.onResume(); if(::log.isInitialized) refresh(); handler.post(ticker) }
  override fun onPause() { handler.removeCallbacks(ticker); super.onPause() }
