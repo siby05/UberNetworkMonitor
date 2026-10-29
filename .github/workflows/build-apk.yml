@@ -5,22 +5,24 @@ on:
     branches: [main, master]
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Build debug APK
-        run: gradle --no-daemon :app:assembleDebug
+      - name: Build debug APK using runner Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          gradle --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: UberNetworkMonitor-debug-APK
           path: app/build/outputs/apk/debug/app-debug.apk
