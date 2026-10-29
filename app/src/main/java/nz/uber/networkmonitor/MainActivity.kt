@@ -143,41 +143,71 @@ class MainActivity : Activity() {
  override fun onResume() { super.onResume(); if(::log.isInitialized) refresh(); handler.post(ticker) }
  override fun onPause() { handler.removeCallbacks(ticker); super.onPause() }
  private fun showReport() {
-  val f=File(filesDir,"events.csv")
-  if(!f.exists()) { android.app.AlertDialog.Builder(this).setTitle("History").setMessage("No recorded sessions yet").setPositiveButton("Close",null).show(); return }
-  val zone=ZoneId.of("Pacific/Auckland")
-  val fmt=DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm:ss a").withZone(zone)
-  val rows=f.readLines().drop(1).mapNotNull { line ->
-   val parts=line.split(",",limit=5)
-   if(parts.size<2) null else try { Pair(Instant.parse(parts[0]),parts[1]) } catch(_:Exception) { null }
+  val file=File(filesDir,"events.csv")
+  if(!file.exists()) { android.app.AlertDialog.Builder(this).setTitle("Network Summary").setMessage("No monitoring data recorded yet").setPositiveButton("Close",null).show(); return }
+  data class Event(val time:Instant,val kind:String,val latency:Long?)
+  val events=file.readLines().drop(1).mapNotNull { line ->
+   val p=line.split(",",limit=5)
+   if(p.size<4) null else try { Event(Instant.parse(p[0]),p[1],p[3].toLongOrNull()) } catch(_:Exception) { null }
   }
-  val report=StringBuilder("NETWORK OUTAGE REPORT (New Zealand time)\n\n")
-  var started:Instant?=null
-  var total=0L
-  var count=0
-  for((time,event) in rows) {
-   if(event=="OUTAGE_STARTED" && started==null) started=time
-   if(event=="NETWORK_RESTORED" && started!=null) {
-    val begin=started!!
-    val seconds=java.time.Duration.between(begin,time).seconds.coerceAtLeast(0)
-    count++; total+=seconds
-    report.append("${fmt.format(begin)} → ${fmt.format(time)}\nDuration: ${seconds/60}m ${seconds%60}s\n\n")
-    started=null
+  if(events.isEmpty()) { android.app.AlertDialog.Builder(this).setTitle("Network Summary").setMessage("No monitoring data recorded yet").setPositiveButton("Close",null).show(); return }
+  val fmt=DateTimeFormatter.ofPattern("dd MMM, hh:mm a").withZone(ZoneId.of("Pacific/Auckland"))
+  val checks=events.filter { it.kind=="OK" || it.kind=="INTERNET_FAILURE" || it.kind=="HTTP_UNEXPECTED" }
+  val success=checks.count { it.kind=="OK" }
+  val failed=checks.size-success
+  val pct=if(checks.isEmpty()) 0.0 else failed*100.0/checks.size
+  val latencies=checks.filter { it.kind=="OK" }.mapNotNull { it.latency }
+  val avg=if(latencies.isEmpty()) "—" else "${latencies.average().toLong()} ms"
+  val slow=events.count { it.kind=="SLOW_NETWORK" }
+  var outageStart:Instant?=null
+  var outageCount=0
+  var confirmedSeconds=0L
+  var incomplete=0
+  val important=mutableListOf<String>()
+  var sessionStart:Instant?=null
+  var monitoredSeconds=0L
+  for(e in events) {
+   when(e.kind) {
+    "SESSION_START" -> { if(sessionStart!=null) monitoredSeconds+=java.time.Duration.between(sessionStart,e.time).seconds.coerceAtLeast(0); sessionStart=e.time }
+    "SESSION_STOP" -> { if(sessionStart!=null) monitoredSeconds+=java.time.Duration.between(sessionStart,e.time).seconds.coerceAtLeast(0); sessionStart=null }
    }
-   if(event=="SESSION_STOP" || event=="SESSION_START" || event=="MONITORING_GAP" || event=="OUTAGE_INTERRUPTED") {
-    if(started!=null) { report.append("Incomplete outage (monitoring interrupted): ${fmt.format(started)}\n\n"); started=null }
+   when(e.kind) {
+    "OUTAGE_STARTED" -> { outageStart=e.time; important.add("🔴 ${fmt.format(e.time)}  Network down") }
+    "NETWORK_RESTORED" -> {
+     if(outageStart!=null) { confirmedSeconds+=java.time.Duration.between(outageStart,e.time).seconds.coerceAtLeast(0); outageCount++; outageStart=null }
+     important.add("🟢 ${fmt.format(e.time)}  Network restored")
+    }
+    "OUTAGE_INTERRUPTED","MONITORING_GAP" -> {
+     if(outageStart!=null) { incomplete++; outageStart=null }
+     important.add("⚪ ${fmt.format(e.time)}  Monitoring interrupted")
+    }
+    "SLOW_NETWORK" -> important.add("🟠 ${fmt.format(e.time)}  Slow network")
+    "NETWORK_QUALITY_RECOVERED" -> important.add("🟢 ${fmt.format(e.time)}  Speed improved")
+    "UBER_MARKER" -> important.add("📍 ${fmt.format(e.time)}  Uber marker")
    }
   }
-  if(started!=null) report.append("Ongoing / unconfirmed end: ${fmt.format(started)}\n")
-  report.append("\nCompleted outages: $count\nTotal confirmed duration: ${total/60}m ${total%60}s")
-  val recentEvents=rows.takeLast(20).asReversed().joinToString("\n") { (time,event) ->
-   "${fmt.format(time)}  •  ${event.replace('_',' ')}"
-  }
-  val message=report.toString()+"\n\nRECENT EVENTS\n"+recentEvents
+  if(sessionStart!=null) monitoredSeconds+=java.time.Duration.between(sessionStart,Instant.now()).seconds.coerceAtLeast(0)
+  if(outageStart!=null) incomplete++
+  val span=if(monitoredSeconds>0) "${monitoredSeconds/3600}h ${monitoredSeconds%3600/60}m" else "Not available"
+  val report=StringBuilder()
+  report.append("OVERVIEW · NZ TIME\n")
+  report.append("${fmt.format(events.first().time)} – ${fmt.format(events.last().time)}\n\n")
+  report.append("Monitoring duration: $span\n")
+  report.append("Total checks: ${checks.size}\n")
+  report.append("Successful: $success  •  Failed: $failed\n")
+  report.append("Failed checks: ${"%.1f".format(java.util.Locale.US,pct)}%\n")
+  report.append("Average response: $avg\n\n")
+  report.append("NETWORK EVENTS\n")
+  report.append("Slow network alerts: $slow\n")
+  report.append("Confirmed outages: $outageCount\n")
+  report.append("Confirmed downtime: ${confirmedSeconds/60}m ${confirmedSeconds%60}s\n")
+  if(incomplete>0) report.append("Incomplete / ongoing outages: $incomplete\n")
+  report.append("\nIMPORTANT EVENTS (LATEST 12)\n")
+  report.append(if(important.isEmpty()) "No major network events recorded" else important.takeLast(12).asReversed().joinToString("\n"))
+  report.append("\n\nNote: Response time is an HTTPS check, not ICMP ping. Duration excludes known stopped periods but may include monitoring gaps.")
   val scroll=ScrollView(this)
-  val body=text(message,14f,ink).apply { setPadding(dp(18),dp(12),dp(18),dp(12)); setTextIsSelectable(true) }
-  scroll.addView(body)
-  android.app.AlertDialog.Builder(this).setTitle("Network History · NZ Time").setView(scroll).setPositiveButton("Close",null).show()
+  scroll.addView(text(report.toString(),14f,ink).apply { setPadding(dp(20),dp(16),dp(20),dp(16)); setTextIsSelectable(true) })
+  android.app.AlertDialog.Builder(this).setTitle("PULSE · Network Health Summary").setView(scroll).setPositiveButton("Close",null).show()
  }
  private fun refresh() { if(::graph.isInitialized) graph.invalidate(); log.visibility=View.GONE }
 }
