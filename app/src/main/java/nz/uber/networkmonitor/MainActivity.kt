@@ -31,6 +31,8 @@ class MainActivity : Activity() {
  private fun text(value:String,size:Float,color:Int,bold:Boolean=false)=TextView(this).apply { text=value; textSize=size; setTextColor(color); if(bold) setTypeface(null,Typeface.BOLD) }
  private lateinit var networkInfo:TextView
  private lateinit var play:Button
+ private lateinit var graph:PerformanceGraph
+ private lateinit var metrics:TextView
  private val green=Color.rgb(39,174,96)
  private val red=Color.rgb(215,61,72)
  private val ink=Color.rgb(35,48,64)
@@ -59,6 +61,11 @@ class MainActivity : Activity() {
   card.addView(statusCard,LinearLayout.LayoutParams(-1,dp(126)))
   val tip=text("Internet check every 5 seconds · NZ time",12f,muted).apply { gravity=Gravity.CENTER; setPadding(0,dp(16),0,0) }
   card.addView(tip)
+  metrics=text("Ping —   •   Jitter —   •   Failed checks —",13f,ink,true).apply { gravity=Gravity.CENTER; setPadding(0,dp(12),0,dp(8)) }
+  root.addView(metrics)
+  root.addView(text("PING HISTORY  ·  NZ TIME",12f,muted,true).apply { setPadding(0,dp(8),0,dp(6)) })
+  graph=PerformanceGraph(this)
+  root.addView(graph,LinearLayout.LayoutParams(-1,dp(160)))
   val middle=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER }
   val space=LinearLayout.LayoutParams(-1,0,1f)
   root.addView(middle,space)
@@ -98,7 +105,11 @@ class MainActivity : Activity() {
  private fun updateStatus() {
   val value=getSharedPreferences("monitor",MODE_PRIVATE).getString("state","STOPPED") ?: "STOPPED"
   val (label,description,color)=when(value) {
-   "OK"->Triple("●  INTERNET OK","Connected and accessible",green)
+   "OK"-> {
+    val quality=getSharedPreferences("monitor",MODE_PRIVATE).getString("quality","GOOD")
+    if(quality=="FAIR" || quality=="POOR") Triple("⚠  SLOW NETWORK","High ping, jitter or failed checks",Color.rgb(211,155,26))
+    else Triple("●  INTERNET OK","Connected and responsive",green)
+   }
    "DOWN"->Triple("●  NETWORK FAILED","Connected, but internet inaccessible",red)
    "PAUSED"->Triple("Ⅱ  PAUSED","No Wi-Fi or mobile data",muted)
    "CHECKING"->Triple("◌  CHECKING","Testing internet accessibility",Color.rgb(51,117,186))
@@ -106,6 +117,12 @@ class MainActivity : Activity() {
   }
   status.text=label; status.setTextColor(color); subtitle.text=description
   statusCard.background=bg(Color.argb(23,Color.red(color),Color.green(color),Color.blue(color)),dp(16).toFloat())
+  val pref=getSharedPreferences("monitor",MODE_PRIVATE)
+  val ping=pref.getLong("ping",-1L)
+  val jitter=pref.getLong("jitter",-1L)
+  val loss=pref.getFloat("loss",0f)
+  metrics.text="Ping: ${if(ping>=0) "${ping} ms" else "—"}   •   Jitter: ${if(jitter>=0) "${jitter} ms" else "—"}   •   Failed: ${"%.1f".format(java.util.Locale.US,loss)}%"
+  if(::graph.isInitialized) graph.invalidate()
   play.text=if(value=="STOPPED") "▶" else "■"
   play.background=bg(if(value=="STOPPED") green else red,dp(90).toFloat())
   val cm=getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -138,7 +155,7 @@ class MainActivity : Activity() {
     report.append("${fmt.format(begin)} → ${fmt.format(time)}\nDuration: ${seconds/60}m ${seconds%60}s\n\n")
     started=null
    }
-   if(event=="SESSION_STOP" || event=="SESSION_START" || event=="MONITORING_GAP") {
+   if(event=="SESSION_STOP" || event=="SESSION_START" || event=="MONITORING_GAP" || event=="OUTAGE_INTERRUPTED") {
     if(started!=null) { report.append("Incomplete outage (monitoring interrupted): ${fmt.format(started)}\n\n"); started=null }
    }
   }
