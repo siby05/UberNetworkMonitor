@@ -47,7 +47,9 @@ class MainActivity : Activity() {
   header.addView(text("⌁  ◉  ⌁",26f,green,true).apply { gravity=Gravity.CENTER })
   header.addView(text("PULSE",21f,ink,true).apply { gravity=Gravity.CENTER })
   header.addView(text("NETWORK MONITOR",10f,muted,true).apply { gravity=Gravity.CENTER })
-  root.addView(header)
+  val headerContainer=android.widget.FrameLayout(this)
+  headerContainer.addView(header,android.widget.FrameLayout.LayoutParams(-1,-2))
+  root.addView(headerContainer)
   val card=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(14),dp(10),dp(14),dp(10)); background=bg(Color.WHITE,dp(18).toFloat()); elevation=dp(3).toFloat() }
   val cardParams=LinearLayout.LayoutParams(-1,-2).apply { topMargin=dp(8) }
   root.addView(card,cardParams)
@@ -76,25 +78,26 @@ class MainActivity : Activity() {
   } }
   middle.addView(play,LinearLayout.LayoutParams(dp(60),dp(60)))
   middle.addView(text("Tap to start or stop",12f,muted).apply { gravity=Gravity.CENTER; setPadding(0,dp(2),0,0) })
-  val nav=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER; setPadding(0,dp(4),0,dp(2)) }
-  fun tab(label:String,click:()->Unit) {
-   val b=Button(this).apply { text=label; textSize=12f; isAllCaps=false; setTextColor(ink); background=bg(Color.rgb(234,240,247),dp(14).toFloat()); setOnClickListener { click() } }
-   nav.addView(b,LinearLayout.LayoutParams(0,dp(52),1f).apply { marginEnd=dp(5) })
+  // Navigation lives in the top-right hamburger menu to preserve dashboard space.
+  val menuButton=Button(this).apply {
+   text="☰"; textSize=25f; isAllCaps=false; contentDescription="Open navigation menu"
+   setTextColor(ink); background=bg(Color.rgb(234,240,247),dp(12).toFloat())
+   setOnClickListener {
+    val items=arrayOf("Monitor · Live dashboard","History · Network events","Uber Mark · Mark suspected missed trip","Share CSV report","Outage report","Refresh readings")
+    android.app.AlertDialog.Builder(this@MainActivity).setTitle("PULSE Menu").setItems(items) { _,which ->
+     when(which) {
+      0->refresh()
+      1->showReport()
+      2->{ MonitorService.append(this@MainActivity,"UBER_MARKER","manual","","User marked suspected missed request"); Toast.makeText(this@MainActivity,"Uber marker saved",Toast.LENGTH_SHORT).show() }
+      3->{ val file=File(filesDir,"events.csv"); if(file.exists()) { val share=Intent(Intent.ACTION_SEND).apply { type="text/plain"; putExtra(Intent.EXTRA_TEXT,file.readText()) }; startActivity(Intent.createChooser(share,"Share CSV report")) } else Toast.makeText(this@MainActivity,"No report yet",Toast.LENGTH_SHORT).show() }
+      4->showReport()
+      5->refresh()
+     }
+    }.show()
+   }
   }
-  tab("◉\nMonitor") { refresh() }
-  tab("◷\nHistory") { showReport() }
-  tab("＋\nUber mark") { MonitorService.append(this,"UBER_MARKER","manual","","User marked suspected missed request"); Toast.makeText(this,"Marker saved",Toast.LENGTH_SHORT).show(); refresh() }
-  tab("⚙\nMore") {
-   val options=arrayOf("Refresh readings","Share CSV","Outage report")
-   android.app.AlertDialog.Builder(this).setTitle("PULSE tools").setItems(options) { _,which ->
-    when(which) {
-     0->refresh()
-     1->{ val file=File(filesDir,"events.csv"); if(file.exists()) { val intent=Intent(Intent.ACTION_SEND).apply { type="text/plain"; putExtra(Intent.EXTRA_TEXT,file.readText()) }; startActivity(Intent.createChooser(intent,"Share CSV report")) } else Toast.makeText(this,"No report yet",Toast.LENGTH_SHORT).show() }
-     2->showReport()
-    }
-   }.show()
-  }
-  root.addView(nav)
+  val menuParams=android.widget.FrameLayout.LayoutParams(dp(52),dp(48),Gravity.TOP or Gravity.RIGHT)
+  headerContainer.addView(menuButton,menuParams)
   log=text("No readings yet",11f,muted).apply { setTextIsSelectable(true); setPadding(dp(10),dp(8),dp(10),dp(8)); background=bg(Color.WHITE,dp(12).toFloat()); maxLines=5 }
   log.visibility=View.GONE
   root.addView(log,LinearLayout.LayoutParams(-1,dp(82)))
