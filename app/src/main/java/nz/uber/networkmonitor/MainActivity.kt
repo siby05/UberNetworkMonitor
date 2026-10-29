@@ -57,19 +57,20 @@ class MainActivity : Activity() {
   networkInfo=text("Detecting network…",15f,ink).apply { setPadding(0,dp(6),0,dp(7)) }
   card.addView(networkInfo)
   statusCard=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; setPadding(dp(10),dp(8),dp(10),dp(8)); background=bg(Color.rgb(238,242,247),dp(16).toFloat()) }
-  status=text("○  NOT RUNNING",24f,ink,true).apply { gravity=Gravity.CENTER }
+  status=text("○  NOT RUNNING",21f,ink,true).apply { gravity=Gravity.CENTER }
   subtitle=text("Press Start to monitor",13f,muted).apply { gravity=Gravity.CENTER; setPadding(0,dp(7),0,0) }
   statusCard.addView(status); statusCard.addView(subtitle)
   card.addView(statusCard,LinearLayout.LayoutParams(-1,dp(88)))
   val tip=text("Internet check every 5 seconds · NZ time",12f,muted).apply { gravity=Gravity.CENTER; setPadding(0,dp(6),0,0) }
   card.addView(tip)
-  metrics=text("Ping —   •   Jitter —   •   Failed checks —",13f,ink,true).apply { gravity=Gravity.CENTER; setPadding(0,dp(12),0,dp(8)) }
+  metrics=text("Response —   •   Variation —   •   Failed checks —",13f,ink,true).apply { gravity=Gravity.CENTER; setPadding(0,dp(12),0,dp(8)) }
   root.addView(metrics)
-  root.addView(text("PING HISTORY  ·  NZ TIME",12f,muted,true).apply { setPadding(0,dp(8),0,dp(6)) })
+  root.addView(text("RESPONSE TIME  ·  LAST 60 SUCCESSFUL CHECKS",12f,muted,true).apply { setPadding(0,dp(8),0,dp(6)) })
+  root.addView(text("Lower is better  •  Green: good  •  Amber: fair  •  Red: poor",11f,muted))
   graph=PerformanceGraph(this)
-  root.addView(graph,LinearLayout.LayoutParams(-1,0,1f).apply { topMargin=dp(8); bottomMargin=dp(12) })
-  val middle=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER }
-  root.addView(middle,LinearLayout.LayoutParams(-1,dp(112)).apply { bottomMargin=dp(26) })
+  root.addView(graph,LinearLayout.LayoutParams(-1,dp(220)).apply { topMargin=dp(8); bottomMargin=dp(12) })
+  val middle=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; background=bg(Color.WHITE,dp(18).toFloat()) }
+  // Bottom action is anchored outside the scrollable dashboard.
   play=Button(this).apply { text="▶"; textSize=23f; isAllCaps=false; setTextColor(Color.WHITE); background=bg(green,dp(90).toFloat()); elevation=dp(5).toFloat(); setOnClickListener {
    val current=getSharedPreferences("monitor",MODE_PRIVATE).getString("state","STOPPED")
    if(current=="STOPPED") { val i=Intent(this@MainActivity,MonitorService::class.java).setAction("START"); if(Build.VERSION.SDK_INT>=26) startForegroundService(i) else startService(i); getSharedPreferences("monitor",MODE_PRIVATE).edit().putString("state","CHECKING").apply() }
@@ -101,7 +102,12 @@ class MainActivity : Activity() {
   log=text("No readings yet",11f,muted).apply { setTextIsSelectable(true); setPadding(dp(10),dp(8),dp(10),dp(8)); background=bg(Color.WHITE,dp(12).toFloat()); maxLines=5 }
   log.visibility=View.GONE
   // History is displayed in a dialog; do not reserve hidden dashboard space.
-  setContentView(root)
+  val outer=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(248,250,253)) }
+  val scroll=ScrollView(this).apply { isFillViewport=false; clipToPadding=false }
+  scroll.addView(root)
+  outer.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
+  outer.addView(middle,LinearLayout.LayoutParams(-1,dp(112)).apply { bottomMargin=dp(8) })
+  setContentView(outer)
   if(Build.VERSION.SDK_INT>=33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),11)
   refresh(); updateStatus()
  }
@@ -124,7 +130,7 @@ class MainActivity : Activity() {
   val ping=pref.getLong("ping",-1L)
   val jitter=pref.getLong("jitter",-1L)
   val loss=pref.getFloat("loss",0f)
-  metrics.text="Ping: ${if(ping>=0) "${ping} ms" else "—"}   •   Jitter: ${if(jitter>=0) "${jitter} ms" else "—"}   •   Failed: ${"%.1f".format(java.util.Locale.US,loss)}%"
+  metrics.text="Response: ${if(ping>=0) "${ping} ms" else "—"}   •   Variation: ${if(jitter>=0) "${jitter} ms" else "—"}   •   Failed: ${"%.1f".format(java.util.Locale.US,loss)}%"
   if(::graph.isInitialized) graph.invalidate()
   play.text=if(value=="STOPPED") "▶" else "■"
   play.background=bg(if(value=="STOPPED") green else red,dp(90).toFloat())
