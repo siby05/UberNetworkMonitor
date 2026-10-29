@@ -135,8 +135,7 @@ class MainActivity : Activity() {
  override fun onPause() { handler.removeCallbacks(ticker); super.onPause() }
  private fun showReport() {
   val f=File(filesDir,"events.csv")
-  log.visibility=View.VISIBLE
-  if(!f.exists()) { log.text="No recorded sessions yet"; return }
+  if(!f.exists()) { android.app.AlertDialog.Builder(this).setTitle("History").setMessage("No recorded sessions yet").setPositiveButton("Close",null).show(); return }
   val zone=ZoneId.of("Pacific/Auckland")
   val fmt=DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm:ss a").withZone(zone)
   val rows=f.readLines().drop(1).mapNotNull { line ->
@@ -162,7 +161,14 @@ class MainActivity : Activity() {
   }
   if(started!=null) report.append("Ongoing / unconfirmed end: ${fmt.format(started)}\n")
   report.append("\nCompleted outages: $count\nTotal confirmed duration: ${total/60}m ${total%60}s")
-  log.text=report.toString()
+  val recentEvents=rows.takeLast(20).asReversed().joinToString("\n") { (time,event) ->
+   "${fmt.format(time)}  •  ${event.replace('_',' ')}"
+  }
+  val message=report.toString()+"\n\nRECENT EVENTS\n"+recentEvents
+  val scroll=ScrollView(this)
+  val body=text(message,14f,ink).apply { setPadding(dp(18),dp(12),dp(18),dp(12)); setTextIsSelectable(true) }
+  scroll.addView(body)
+  android.app.AlertDialog.Builder(this).setTitle("Network History · NZ Time").setView(scroll).setPositiveButton("Close",null).show()
  }
  private fun refresh() { if(::graph.isInitialized) graph.invalidate(); log.visibility=View.GONE }
 }
