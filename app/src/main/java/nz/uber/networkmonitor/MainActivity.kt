@@ -44,7 +44,7 @@ class MainActivity : Activity() {
   window.decorView.systemUiVisibility=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
   val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(22),dp(18),dp(22),dp(12)); setBackgroundColor(Color.rgb(248,250,253)) }
   val header=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER }
-  header.addView(text("◉",35f,green,true).apply { gravity=Gravity.CENTER })
+  header.addView(text("⌁  ◉  ⌁",35f,green,true).apply { gravity=Gravity.CENTER })
   header.addView(text("PULSE",24f,ink,true).apply { gravity=Gravity.CENTER })
   header.addView(text("NETWORK MONITOR",10f,muted,true).apply { gravity=Gravity.CENTER })
   root.addView(header)
@@ -97,6 +97,7 @@ class MainActivity : Activity() {
   }
   root.addView(nav)
   log=text("No readings yet",11f,muted).apply { setTextIsSelectable(true); setPadding(dp(10),dp(8),dp(10),dp(8)); background=bg(Color.WHITE,dp(12).toFloat()); maxLines=5 }
+  log.visibility=View.GONE
   root.addView(log,LinearLayout.LayoutParams(-1,dp(82)))
   setContentView(root)
   if(Build.VERSION.SDK_INT>=33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),11)
@@ -135,6 +136,7 @@ class MainActivity : Activity() {
  override fun onPause() { handler.removeCallbacks(ticker); super.onPause() }
  private fun showReport() {
   val f=File(filesDir,"events.csv")
+  log.visibility=View.VISIBLE
   if(!f.exists()) { log.text="No recorded sessions yet"; return }
   val zone=ZoneId.of("Pacific/Auckland")
   val fmt=DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm:ss a").withZone(zone)
@@ -163,5 +165,5 @@ class MainActivity : Activity() {
   report.append("\nCompleted outages: $count\nTotal confirmed duration: ${total/60}m ${total%60}s")
   log.text=report.toString()
  }
- private fun refresh() { val f=File(filesDir,"events.csv"); log.text=if(f.exists()) f.readLines().takeLast(35).joinToString("\n") else "No readings yet" }
+ private fun refresh() { if(::graph.isInitialized) graph.invalidate(); log.visibility=View.GONE }
 }
