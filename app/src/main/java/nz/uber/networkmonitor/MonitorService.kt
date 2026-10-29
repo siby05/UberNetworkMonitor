@@ -22,7 +22,9 @@ class MonitorService : Service() {
  private var paused=false
  private val recent=ArrayDeque<Pair<Boolean,Long>>()
  private var previousLatency:Long?=null
- private val alertChannel="network_alerts"
+ private val alertChannel="pulse_critical_alerts_v2"
+ private val slowChannel="pulse_slow_alerts_v2"
+ private var slowActive=false
  private fun state(value:String) { getSharedPreferences("monitor",MODE_PRIVATE).edit().putString("state",value).apply() }
  override fun onBind(intent:Intent?) : IBinder? = null
  override fun onStartCommand(intent:Intent?, flags:Int, startId:Int):Int {
@@ -33,7 +35,8 @@ class MonitorService : Service() {
   val channel="network_monitor"
   val nm=getSystemService(NotificationManager::class.java)
   nm.createNotificationChannel(NotificationChannel(channel,"Active network monitoring",NotificationManager.IMPORTANCE_LOW))
-  nm.createNotificationChannel(NotificationChannel(alertChannel,"Network outage alerts",NotificationManager.IMPORTANCE_HIGH).apply { enableVibration(true); setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI,null) })
+  nm.createNotificationChannel(NotificationChannel(alertChannel,"PULSE - Network down and restored",NotificationManager.IMPORTANCE_HIGH).apply { enableVibration(true); setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI,android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION).build()) })
+  nm.createNotificationChannel(NotificationChannel(slowChannel,"PULSE - Slow network warnings",NotificationManager.IMPORTANCE_HIGH).apply { enableVibration(true); setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI,android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION).build()) })
   val pending=PendingIntent.getActivity(this,0,Intent(this,MainActivity::class.java),PendingIntent.FLAG_IMMUTABLE)
   val notification=Notification.Builder(this,channel).setContentTitle("PULSE Network Monitor active").setContentText("Checking connection every 5 seconds (low data)").setSmallIcon(android.R.drawable.stat_notify_sync).setContentIntent(pending).setOngoing(true).build()
   startForeground(1,notification)
@@ -52,6 +55,7 @@ class MonitorService : Service() {
   val cellular=caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)==true
   if(!wifi && !cellular) {
    if(!paused) {
+    slowActive=false
     paused=true
     state("PAUSED")
     if(outage) { outage=false; append(this,"OUTAGE_INTERRUPTED","","","Transport disconnected; no confirmed restoration") }
@@ -60,7 +64,7 @@ class MonitorService : Service() {
    }
    return
   }
-  if(paused) { paused=false; failures=0; lastCheck=now; recent.clear(); previousLatency=null }
+  if(paused) { paused=false; slowActive=false; failures=0; lastCheck=now; recent.clear(); previousLatency=null }
   var latency=""
   var result="INTERNET_FAILURE"
   var details=""
@@ -87,6 +91,9 @@ class MonitorService : Service() {
   val prefs=getSharedPreferences("monitor",MODE_PRIVATE)
   prefs.edit().putString("quality",quality).putLong("ping",ms).putLong("jitter",jitter).putFloat("loss",failedPercent.toFloat()).apply()
   state(if(good) "OK" else if(failures>=1) "DOWN" else "CHECKING")
+  val isSlow=good && (quality=="FAIR" || quality=="POOR")
+  if(isSlow && !slowActive) { slowActive=true; append(this,"SLOW_NETWORK","",latency,"Response time or variation exceeded threshold"); notifyAlert("SLOW NETWORK","Connection quality has degraded",slowChannel,3) }
+  if(!isSlow && slowActive) { slowActive=false; if(good) { append(this,"NETWORK_QUALITY_RECOVERED","",latency,"Connection quality improved") } }
   record(result,transport,latency,"$details; quality=$quality; jitter_ms=$jitter; failed_checks_pct=${"%.1f".format(java.util.Locale.US,failedPercent)}")
   updateAlert(result=="OK",if(result=="OK") "Internet restored" else "Internet check failed ($result)")
  }
@@ -103,12 +110,12 @@ class MonitorService : Service() {
    else if(now-lastAlert>=30000) { notifyAlert("NETWORK STILL DOWN",reason); lastAlert=now }
   }
  }
- private fun notifyAlert(title:String,message:String) {
+ private fun notifyAlert(title:String,message:String,channel:String=alertChannel,id:Int=2) {
   val manager=getSystemService(NotificationManager::class.java)
-  val notification=Notification.Builder(this,alertChannel).setSmallIcon(android.R.drawable.stat_notify_error)
+  val notification=Notification.Builder(this,channel).setSmallIcon(android.R.drawable.stat_notify_error)
    .setContentTitle(title).setContentText(message).setAutoCancel(true)
    .setContentIntent(PendingIntent.getActivity(this,0,Intent(this,MainActivity::class.java),PendingIntent.FLAG_IMMUTABLE)).build()
-  manager.notify(2,notification)
+  manager.notify(id,notification)
  }
  private fun record(status:String,transport:String,latency:String,details:String) { append(this,status,transport,latency,details) }
  override fun onDestroy() { running=false; executor.shutdownNow(); super.onDestroy() }
